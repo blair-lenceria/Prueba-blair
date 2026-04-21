@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blair | Admin Hub</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖤</text></svg>">
+
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+
+    <style>
+        :root { --beige: #f9f6f2; --dark: #333; }
+        
+        body { 
+            margin: 0; font-family: 'Montserrat', sans-serif; 
+            background: var(--beige); color: var(--dark); 
+            display: flex; flex-direction: column; min-height: 100vh;
+        }
+
+        header { 
+            background: black; color: white; padding: 15px 0; 
+            text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        }
+
+        .logo-title {
+            font-family: 'Cormorant Garamond', serif; font-size: 26px; 
+            letter-spacing: 6px; font-weight: 600; text-transform: uppercase;
+        }
+
+        .logo-subtitle {
+            font-size: 9px; letter-spacing: 8px; font-weight: 300; 
+            text-transform: uppercase; margin-top: 3px; opacity: 0.8;
+        }
+
+        main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; }
+
+        .workspace-card {
+            background: white; width: 100%; max-width: 400px;
+            padding: 40px 25px; border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03); text-align: center; box-sizing: border-box;
+        }
+
+        h2 { 
+            font-family: 'Cormorant Garamond', serif; font-weight: 400; 
+            text-transform: uppercase; letter-spacing: 2px; margin: 0 0 10px 0; font-size: 22px;
+        }
+
+        p { font-size: 12px; color: #888; margin-bottom: 30px; }
+
+        .btn { 
+            display: block; width: 100%; padding: 18px; 
+            background: black; color: white; border: none; 
+            border-radius: 50px; cursor: pointer; text-transform: uppercase; 
+            font-size: 13px; font-weight: bold; letter-spacing: 2px;
+            text-decoration: none; margin-bottom: 15px; box-sizing: border-box;
+            transition: transform 0.2s;
+        }
+
+        .btn:active { transform: scale(0.98); }
+
+        .btn-outline { background: transparent; color: black; border: 2px solid black; padding: 16px; }
+
+        /* OCULTAR BOTÓN GRIS */
+        #imageInput { 
+            display: none !important; visibility: hidden !important; 
+            width: 0 !important; height: 0 !important; position: absolute !important;
+        }
+
+        #stats {
+            display: none; background: #fdfdfd; border: 1px dashed #ddd;
+            padding: 15px; border-radius: 10px; margin: 15px 0;
+            font-size: 13px; color: #555; line-height: 1.6; text-align: left;
+        }
+
+        #preview { max-width: 100%; border-radius: 10px; margin-top: 10px; display: none; border: 1px solid #eee; }
+
+        #toast { 
+            display: none; position: fixed; bottom: 30px; left: 50%; 
+            transform: translateX(-50%); background: rgba(0,0,0,0.8); 
+            color: white; padding: 12px 25px; border-radius: 30px; 
+            font-size: 14px; z-index: 5000; 
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo-main">
+        <div class="logo-title">BLAIR</div>
+        <div class="logo-subtitle">ADMIN WORKSPACE</div>
+    </div>
+</header>
+
+<main>
+    <div class="workspace-card">
+        <h2>Herramientas</h2>
+        <p>Optimizá fotos y gestioná la tienda</p>
+
+        <label for="imageInput" class="btn">Optimizar Foto Nueva</label>
+        <input type="file" id="imageInput" accept="image/*">
+
+        <a href="https://blair-lenceria.github.io/tienda/" class="btn btn-outline">Ir a la Tienda</a>
+
+        <div id="stats"></div>
+        <img id="preview" alt="Preview">
+        <a id="downloadBtn" class="btn" style="display:none; background:#25D366;">Descargar WebP con Marca</a>
+    </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').catch(err => console.log(err));
+        });
+    }
+
+    let toastTimer;
+    function showToast(m) {
+        const t = document.getElementById('toast');
+        t.innerText = m; t.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2500);
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + ['Bytes', 'KB', 'MB'][i];
+    }
+
+    const input = document.getElementById('imageInput');
+    const stats = document.getElementById('stats');
+    const preview = document.getElementById('preview');
+    const download = document.getElementById('downloadBtn');
+
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        showToast("Procesando imagen...");
+        
+        const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1200, useWebWorker: true };
+
+        try {
+            const compressed = await imageCompression(file, options);
+            const img = new Image();
+            img.src = URL.createObjectURL(compressed);
+            
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                
+                const fontSize = Math.floor(canvas.width * 0.05);
+                ctx.font = `bold ${fontSize}px Montserrat`;
+                ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+                ctx.textAlign = "right";
+                ctx.fillText("Blair", canvas.width - 20, canvas.height - 30);
+                
+                canvas.toBlob((blob) => {
+                    stats.innerHTML = `<strong>¡Foto lista para publicar!</strong><br>
+                                       Original: ${formatBytes(file.size)}<br>
+                                       Optimizada: ${formatBytes(blob.size)}`;
+                    stats.style.display = "block";
+                    
+                    const url = URL.createObjectURL(blob);
+                    preview.src = url;
+                    preview.style.display = "block";
+                    
+                    download.href = url;
+                    download.download = `blair_prod_${Date.now()}.webp`;
+                    download.style.display = "block";
+                    
+                    showToast("¡Imagen lista!");
+                }, 'image/webp', 0.8);
+            };
+        } catch (err) {
+            showToast("Error al optimizar");
+        }
+    });
+</script>
+
+</body>
+</html>
